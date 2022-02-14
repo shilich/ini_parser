@@ -66,7 +66,7 @@ struct array_whitespace : std::ctype<char>
 inline std::string from_string(tag_t<std::string>, const std::string& str)
 {
     static std::regex comma_regex(R"(\s*\"(((\\\")|[^\"])*)\"\s*)");
-    static std::regex spaces_regex(R"(\s*\b(.*)\b\s*)");
+    static std::regex spaces_regex(R"(\s*(.*\S)\s*)");
     std::smatch match;
     std::string res;
     if(!std::regex_match(str, match, comma_regex))

@@ -27,6 +27,7 @@ BOOST_AUTO_TEST_SUITE(ValueTestSuit)
     BOOST_AUTO_TEST_CASE(ArrayTypeTest)
     {
         ini::Value arr("[1,2, 3, 4, 5, 6, 7, 8, 9, 10]");
+        BOOST_CHECK_EQUAL(arr.as<std::string>(), "[1,2, 3, 4, 5, 6, 7, 8, 9, 10]");
         auto vec = std::move(arr.as<std::vector<int>>());
         for(size_t i = 0; i < 10; ++i)
             BOOST_CHECK_EQUAL(vec[i], i + 1);
