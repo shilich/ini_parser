@@ -27,14 +27,14 @@ class File;
 template <typename Iter>
 void parse(Iter begin_iter, Iter end_iter, File& file);
 
-void parse(const std::string& filename, File& file);
+inline void parse(const std::string& filename, File& file);
 
 class Section : public const_string_map<Value>
 {
 public:
-    explicit Section(const std::string& section_name);
+    inline explicit Section(std::string section_name);
 
-    const std::string& getName() const { return m_section_name; }
+    inline const std::string& getName() const { return m_section_name; }
 
     template <typename T>
     T get(const std::string& name, const T& default_value = T()) const;
@@ -43,7 +43,7 @@ public:
     friend void parse(Iter begin_iter, Iter end_iter, File& file);
 
 private:
-    void addFromString(size_t line_no, const std::string& str);
+    inline void addFromString(size_t line_no, const std::string& str);
 
     const std::string m_section_name;
 };
@@ -57,8 +57,8 @@ public:
     friend void parse(Iter begin_iter, Iter end_iter, File& file);
 };
 
-Section::Section(const std::string& section_name)
-        : m_section_name(section_name){}
+Section::Section(std::string  section_name)
+        : m_section_name(std::move(section_name)){}
 
 template <typename T>
 T Section::get(const std::string& name, const T& default_value) const
