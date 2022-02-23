@@ -63,4 +63,25 @@ BOOST_AUTO_TEST_SUITE(ValueTestSuit)
         BOOST_CHECK(ini::Value("test_enum::one").as<user::test_enum>() == user::test_enum::one);
     }
 
+    BOOST_AUTO_TEST_CASE(WStringTest)
+    {
+        ini::wValue value(L"12.5");
+
+        BOOST_CHECK(value.as<std::wstring>() == L"12.5");
+        BOOST_CHECK_EQUAL(value.as<float>(), 12.5f);
+        BOOST_CHECK_EQUAL(value.as<double>(), 12.5);
+        BOOST_CHECK_EQUAL(value.as<long double>(), 12.5l);
+        BOOST_CHECK_EQUAL(value.as<int>(), 12);
+
+        BOOST_CHECK(ini::wValue(L"\"some \\\"string\"").as<std::wstring>() == L"some \"string");
+
+        BOOST_CHECK_EQUAL(ini::wValue().as<int>(), 0);
+        BOOST_CHECK(ini::wValue().as<std::wstring>(L"default") == L"default");
+
+        ini::wValue arr(L"[1,2, 3, 4, 5, 6, 7, 8, 9, 10]");
+        auto vec = std::move(arr.as<std::vector<int>>());
+        for(size_t i = 0; i < 10; ++i)
+            BOOST_CHECK_EQUAL(vec[i], i + 1);
+    }
+
 BOOST_AUTO_TEST_SUITE_END()

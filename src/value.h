@@ -5,6 +5,7 @@
 #include <sstream>
 #include <regex>
 #include "errors.h"
+#include "synax.h"
 
 namespace ini
 {
@@ -19,24 +20,26 @@ struct tag_t {};
 /**
  * Value class for containing any from string convertible values
  */
-class Value
+template <typename CharT, typename Traits = std::char_traits<CharT>, typename Allocator = std::allocator<CharT>>
+class BasicValue
 {
 public:
+    using string_type = std::basic_string<CharT, Traits, Allocator>;
     /**
      * @brief Default constructor
      * @attention will contain an empty value only
      */
-    inline Value() = default;
+    inline BasicValue() = default;
     /**
      * @brief Copy string constructor
      * @param str string containing a value
      */
-    inline explicit Value(const std::string& str);
+    inline explicit BasicValue(const string_type& str) noexcept;
     /**
      * @brief Move string constructor
      * @param str string containing a value
      */
-    inline explicit Value(std::string&& str);
+    inline explicit BasicValue(string_type&& str) noexcept;
 
     /**
      * @brief Convert to type
@@ -67,8 +70,11 @@ private:
     template <typename T>
     static T get_default(std::false_type) { throw std::invalid_argument("No default value!"); }
 
-    std::string m_str_value;
+    string_type m_str_value;
 };
+
+typedef BasicValue<char> Value;
+typedef BasicValue<wchar_t> wValue;
 
 /**
  * Customization namespace
@@ -151,30 +157,18 @@ struct stringer {};
 namespace details
 {
 
-struct array_whitespace : std::ctype<char>
+template <typename CharT, typename Traits, typename Allocator>
+typename std::basic_string<CharT, Traits, Allocator> from_string(
+        tag_t<std::basic_string<CharT, Traits, Allocator>>,
+        const std::basic_string<CharT, Traits, Allocator>& str)
 {
-    array_whitespace() : std::ctype<char>(get_table()) {}
+    using string_type = std::basic_string<CharT, Traits, Allocator>;
+    static syntax::value_regex_traits<CharT, Traits> vt;
 
-    static std::ctype_base::mask const* get_table()
-    {
-        static std::vector<std::ctype_base::mask>
-                rc(table_size, std::ctype_base::mask());
-        rc['\n'] = std::ctype_base::space;
-        rc[','] = std::ctype_base::space;
-        rc[' '] = std::ctype_base::punct;
-
-        return rc.data();
-    }
-};
-
-inline std::string from_string(tag_t<std::string>, const std::string& str)
-{
-    static std::regex comma_regex(R"(\s*\"(((\\\")|[^\"])*)\"\s*)");
-    static std::regex spaces_regex(R"(\s*(.*\S)\s*)");
-    std::smatch match;
-    std::string res;
-    if(!std::regex_match(str, match, comma_regex))
-        std::regex_match(str, match, spaces_regex);
+    std::match_results<typename string_type::const_iterator, Allocator> match;
+    string_type res;
+    if(!std::regex_match(str, match, vt.comma_regex))
+        std::regex_match(str, match, vt.spaces_regex);
     res = match[1].str();
 
     auto slash_end = std::remove(res.begin(), res.end(), '\\');
@@ -182,15 +176,18 @@ inline std::string from_string(tag_t<std::string>, const std::string& str)
     return res;
 }
 
-inline Value from_string(tag_t<Value>, const std::string& str)
+template <typename CharT, typename Traits, typename Allocator>
+BasicValue<CharT, Traits, Allocator> from_string(tag_t<BasicValue<CharT, Traits, Allocator>>,
+                                                 const std::basic_string<CharT, Traits, Allocator>& str) noexcept
 {
-    return Value(str);
+    return BasicValue<CharT, Traits, Allocator>(str);
 }
 
-template <typename T>
-std::enable_if_t<std::is_fundamental<T>::value, T> from_string(tag_t<T>, const std::string& str)
+template <typename CharT, typename Traits, typename Allocator, typename T>
+std::enable_if_t<std::is_fundamental<T>::value, T> from_string(tag_t<T>,
+        const std::basic_string<CharT, Traits, Allocator>& str)
 {
-    std::istringstream iss(str);
+    std::basic_istringstream<CharT, Traits, Allocator> iss(str);
     T res;
     iss >> res;
     if(iss.fail())
@@ -198,10 +195,11 @@ std::enable_if_t<std::is_fundamental<T>::value, T> from_string(tag_t<T>, const s
     return res;
 }
 
-template <typename T, typename = decltype(operator>>(std::declval<std::istream&>(), std::declval<T&>()))>
-auto from_string(tag_t<T>, const std::string& str) -> decltype(T())
+template <typename CharT, typename Traits, typename Allocator, typename T,
+        typename = decltype(operator>>(std::declval<std::basic_istream<CharT, Traits>&>(), std::declval<T&>()))>
+auto from_string(tag_t<T>, const std::basic_string<CharT, Traits, Allocator>& str) -> decltype(T())
 {
-    std::istringstream iss(str);
+    std::basic_istringstream<CharT, Traits, Allocator> iss(str);
     T res;
     iss >> res;
     if(iss.fail())
@@ -209,42 +207,50 @@ auto from_string(tag_t<T>, const std::string& str) -> decltype(T())
     return res;
 }
 
-template <typename T>
-auto from_string(tag_t<T>, const std::string& str)
+template <typename CharT, typename Traits, typename Allocator, typename T>
+auto from_string(tag_t<T>, const std::basic_string<CharT, Traits, Allocator>& str)
+    noexcept(noexcept(T::from_string(str)))
     -> decltype(T::from_string(str))
 {
     return T::from_string(str);
 }
 
-template <typename T>
-auto from_string(tag_t<T>, const std::string& str)
+template <typename CharT, typename Traits, typename Allocator, typename T>
+auto from_string(tag_t<T>, const std::basic_string<CharT, Traits, Allocator>& str)
+    noexcept(noexcept(customization::stringer<T>::_(str)))
     -> decltype(customization::stringer<T>::_(str))
 {
     return customization::stringer<T>::_(str);
 }
 
-template <typename T, typename = decltype(T().push_back(from_string(ini::tag_t<typename T::value_type>(), std::declval<std::string>())))>
-T from_string(tag_t<T>, const std::string& str)
+template <typename CharT, typename Traits, typename Allocator, typename T,
+        typename = decltype(
+                T().push_back(from_string(ini::tag_t<typename T::value_type>(),
+                        std::declval<std::basic_string<CharT, Traits, Allocator>>()))
+                )>
+T from_string(tag_t<T>, const std::basic_string<CharT, Traits, Allocator>& str)
 {
     using value_t = typename T::value_type;
-    static std::regex array_regex(R"(\[([^\]]*)\])");
-    std::smatch match;
-    if(!std::regex_match(str, match, array_regex))
+    using string_type = std::basic_string<CharT, Traits, Allocator>;
+    static syntax::value_regex_traits<CharT, Traits> vt;
+
+    std::match_results<typename string_type::const_iterator, Allocator> match;
+    if(!std::regex_match(str, match, vt.array_regex))
         throw not_convertible();
-    std::istringstream iss(match[1].str());
-    iss.imbue(std::locale(iss.getloc(), new array_whitespace));
+    std::basic_istringstream<CharT, Traits, Allocator> iss(match[1].str());
+    iss.imbue(std::locale(iss.getloc(), new syntax::array_whitespace<CharT>));
     T res;
-    auto inserter = std::back_inserter(res);
-    std::string tmp;
-    while(iss >> tmp)
-        inserter = from_string(tag_t<value_t>(), tmp);
+    std::transform(std::istream_iterator<string_type, CharT, Traits>(iss),
+                   std::istream_iterator<string_type, CharT, Traits>(),
+                   std::back_inserter(res), [](const string_type& str) { return from_string(tag_t<value_t>(), str); });
     return res;
 }
 
 struct from_string_fn
 {
-    template <typename T>
-    auto operator()(tag_t<T>, const std::string& str) const -> decltype(from_string(tag_t<T>(), str))
+    template <typename CharT, typename Traits, typename Allocator, typename T>
+    auto operator()(tag_t<T>, const std::basic_string<CharT, Traits, Allocator>& str) const
+        -> decltype(from_string(tag_t<T>(), str))
     {
         return from_string(tag_t<T>(), str);
     }
@@ -259,22 +265,26 @@ constexpr details::from_string_fn from_string;
 
 }
 
-Value::Value(const std::string& str)
+template <typename CharT, typename Traits, typename Allocator>
+BasicValue<CharT, Traits, Allocator>::BasicValue(const string_type& str) noexcept
         : m_str_value(str) {}
 
-Value::Value(std::string&& str)
+template <typename CharT, typename Traits, typename Allocator>
+BasicValue<CharT, Traits, Allocator>::BasicValue(string_type&& str) noexcept
         : m_str_value(std::move(str)) {}
 
+template <typename CharT, typename Traits, typename Allocator>
 template <typename T>
-T Value::as(const T& default_value) const
+T BasicValue<CharT, Traits, Allocator>::as(const T& default_value) const
 {
     if(empty())
         return default_value;
     return from_string(tag_t<T>(), m_str_value);
 }
 
+template <typename CharT, typename Traits, typename Allocator>
 template <typename T>
-T Value::as() const
+T BasicValue<CharT, Traits, Allocator>::as() const
 {
     if(empty())
         return get_default<T>(std::is_default_constructible<T>());
