@@ -7,7 +7,7 @@
 namespace ini
 {
 
-class not_convertable : public std::exception
+class not_convertible : public std::exception
 {
 public:
     const char* what() const noexcept override

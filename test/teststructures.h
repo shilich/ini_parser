@@ -90,7 +90,7 @@ inline test_enum from_string(ini::tag_t<test_enum>, const std::string& str)
     else if(str == "test_enum::four")
         return test_enum::four;
     else
-        throw ini::not_convertable();
+        throw ini::not_convertible();
 }
 
 }

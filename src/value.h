@@ -9,22 +9,56 @@
 namespace ini
 {
 
+/**
+ * Type tag
+ * @tparam T type
+ */
 template <typename T>
 struct tag_t {};
 
+/**
+ * Value class for containing any from string convertible values
+ */
 class Value
 {
 public:
+    /**
+     * @brief Default constructor
+     * @attention will contain an empty value only
+     */
     inline Value() = default;
+    /**
+     * @brief Copy string constructor
+     * @param str string containing a value
+     */
     inline explicit Value(const std::string& str);
+    /**
+     * @brief Move string constructor
+     * @param str string containing a value
+     */
     inline explicit Value(std::string&& str);
 
+    /**
+     * @brief Convert to type
+     * @tparam T type to convert to
+     * @return value of type T containing in value string or T() if string was empty
+     * @throw ini::not_convertible if convert wasn't success
+     * @throw std::invalid_argument if value strung was empty and T is not default constructible
+     */
     template <typename T>
     T as() const;
 
+    /**
+     * @brief Convert to type
+     * @tparam T type to convert to
+     * @param default_value value to return if value string is empty
+     * @return value of type T containing in value string or default_value if string was empty
+     * @throw ini::not_convertible if convert wasn't success
+     */
     template <typename T>
     T as(const T& default_value) const;
 
+    //! Returns true if value is empty
     inline bool empty() const { return m_str_value.empty(); }
 private:
     template <typename T>
@@ -36,9 +70,79 @@ private:
     std::string m_str_value;
 };
 
+/**
+ * Customization namespace
+ * Use to define from string converts of types you haven't got access to
+ * Possible ways to customize:
+ *
+ * 1) Define static method from_string in your classes
+ * @code
+ * class my_class
+ * {
+ *  ...
+ * public:
+ *      static my_class from_string(const std::string& str)
+ *      {
+ *          ...
+ *      }
+ * };
+ * @endcode
+ * 2) Define operator>> in your namespaces
+ * @code
+ * namespace user
+ * {
+ *
+ * class my_class { ... };
+ *
+ * std::istream& operator>>(std::istream& is, my_class& value)
+ * {
+ *      ...
+ * }
+ *
+ * }
+ * @endcode
+ * 3) Define from_string(ini::tag_t, std::string) in your namespaces
+ * @code
+ * namespace user
+ * {
+ *
+ * class my_class { ... };
+ *
+ * my_class from_string(ini::tag_t<my_class>, const std::string& str)
+ * {
+ *      ...
+ * }
+ *
+ * }
+ * @endcode
+ * 4) Specialize ini::customization::stringer struct
+ * @see stringer
+ */
 namespace customization
 {
 
+/**
+ * @struct stringer
+ * Structure to define string converting of type
+ * @tparam T type to convert
+ * Specialize this template structure with static void _(const std::string&) for your types
+ * @example
+ * @code
+ * namespace ini::customization
+ * {
+ *
+ * template <>
+ * struct stringer<my_type>
+ * {
+ *      static my_type _(const std::string& str)
+ *      {
+ *          ...
+ *      }
+ * }
+ *
+ * }
+ * @endcode
+ */
 template <typename T>
 struct stringer {};
 
@@ -90,7 +194,7 @@ std::enable_if_t<std::is_fundamental<T>::value, T> from_string(tag_t<T>, const s
     T res;
     iss >> res;
     if(iss.fail())
-        throw not_convertable();
+        throw not_convertible();
     return res;
 }
 
@@ -101,7 +205,7 @@ auto from_string(tag_t<T>, const std::string& str) -> decltype(T())
     T res;
     iss >> res;
     if(iss.fail())
-        throw not_convertable();
+        throw not_convertible();
     return res;
 }
 
@@ -126,7 +230,7 @@ T from_string(tag_t<T>, const std::string& str)
     static std::regex array_regex(R"(\[([^\]]*)\])");
     std::smatch match;
     if(!std::regex_match(str, match, array_regex))
-        throw not_convertable();
+        throw not_convertible();
     std::istringstream iss(match[1].str());
     iss.imbue(std::locale(iss.getloc(), new array_whitespace));
     T res;
