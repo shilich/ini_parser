@@ -38,32 +38,53 @@ public:
     }
 };
 
-template <typename CharT, typename Traits, typename Allocator>
-class Section<std::basic_string<CharT, Traits, Allocator>>
-    : private std::map<
-                    std::basic_string<CharT, Traits, Allocator>,
-                    BasicValue<std::basic_string<CharT, Traits, Allocator>>,
-                    std::less<std::basic_string<CharT, Traits, Allocator>>,
-                    Allocator
-                    >
+namespace details
+{
+
+template <typename V>
+struct map_derived_helper
+{
+    using type = void;
+};
+
+template <template <class> class V, typename CharT, typename Traits, typename Allocator>
+struct map_derived_helper<V<std::basic_string<CharT, Traits, Allocator> > >
+{
+    using string_type = std::basic_string<CharT, Traits, Allocator>;
+    using type = std::map<string_type, V<string_type>, std::less<string_type>, Allocator>;
+};
+
+template <typename V>
+using map_derived_helper_t = typename map_derived_helper<V>::type;
+
+template <typename V>
+struct map_derived : private map_derived_helper_t<V>
+{
+    using string_type = typename map_derived_helper_t<V>::key_type;
+    using allocator_type = typename map_derived_helper_t<V>::allocator_type;
+
+    using map_derived_helper_t<V>::map_derived_helper_t;
+    using map_derived_helper_t<V>::at;
+    using map_derived_helper_t<V>::begin;
+    using map_derived_helper_t<V>::end;
+    using map_derived_helper_t<V>::find;
+    using map_derived_helper_t<V>::clear;
+
+protected:
+    using map_derived_helper_t<V>::get_allocator;
+    using map_derived_helper_t<V>::emplace;
+};
+
+}
+
+template <typename S>
+class Section : public details::map_derived<BasicValue<S>>
 {
 public:
-    using base = std::map<
-                        std::basic_string<CharT, Traits, Allocator>,
-                        BasicValue<std::basic_string<CharT, Traits, Allocator>>,
-                        std::less<std::basic_string<CharT, Traits, Allocator>>,
-                        Allocator
-                        >;
-    using string_type = std::basic_string<CharT, Traits, Allocator>;
-
-    using base::at;
-    using base::begin;
-    using base::end;
-    using base::find;
+    using string_type = typename details::map_derived<BasicValue<S>>::string_type;
+    using allocator_type = typename details::map_derived<BasicValue<S>>::allocator_type;
 
     inline explicit Section(string_type section_name);
-
-    inline const string_type& getName() const { return m_section_name; }
 
     template <typename T>
     T get(const string_type& name, const T& default_value = T()) const;
@@ -77,56 +98,37 @@ private:
     const string_type m_section_name;
 };
 
-template <typename CharT, typename Traits, typename Allocator>
-class File<std::basic_string<CharT, Traits, Allocator>>
-    : private std::map<
-                        std::basic_string<CharT, Traits, Allocator>,
-                        Section<std::basic_string<CharT, Traits, Allocator>>,
-                        std::less<std::basic_string<CharT, Traits, Allocator>>,
-                        Allocator
-                        >
+template <typename S>
+class File : public details::map_derived<Section<S>>
 {
 public:
-    using base = std::map<
-            std::basic_string<CharT, Traits, Allocator>,
-            Section<std::basic_string<CharT, Traits, Allocator>>,
-            std::less<std::basic_string<CharT, Traits, Allocator>>,
-            Allocator
-    >;
-    using string_type = std::basic_string<CharT, Traits, Allocator>;
+    using string_type = typename details::map_derived<Section<S>>::string_type;
+    using allocator_type = typename details::map_derived<Section<S>>::allocator_type;
 
-    using base::at;
-    using base::begin;
-    using base::end;
-    using base::find;
-
-    explicit File(Allocator alloc = Allocator()) : base(alloc) {}
+    explicit File(allocator_type alloc = allocator_type()) : details::map_derived<Section<S>>(alloc) {}
 
     template <typename Iter, typename String>
     friend void parse(Iter begin_iter, Iter end_iter, File<String>& file);
-
-private:
-    using base::clear;
 };
 
-template <typename CharT, typename Traits, typename Allocator>
-Section<std::basic_string<CharT, Traits, Allocator>>::Section(string_type section_name)
-        : base(section_name.get_allocator()), m_section_name(std::move(section_name)) {}
+template <typename S>
+Section<S>::Section(string_type section_name)
+        : details::map_derived<BasicValue<S>>(section_name.get_allocator()), m_section_name(std::move(section_name)) {}
 
-template <typename CharT, typename Traits, typename Allocator>
+template <typename S>
 template <typename T>
-T Section<std::basic_string<CharT, Traits, Allocator>>::get(const string_type& name, const T& default_value) const
+T Section<S>::get(const string_type& name, const T& default_value) const
 {
     if(this->find(name) != this->end())
-        return at(name).template as<T>();
+        return this->at(name).template as<T>();
     return default_value;
 }
 
-template <typename CharT, typename Traits, typename Allocator>
-void Section<std::basic_string<CharT, Traits, Allocator>>::addFromString(size_t line_no, const string_type& str)
+template <typename S>
+void Section<S>::addFromString(size_t line_no, const string_type& str)
 {
-    std::match_results<typename string_type::const_iterator, Allocator> match(this->get_allocator());
-    if(!std::regex_match(str, match, syntax::ini_traits<CharT>::value_regex()))
+    std::match_results<typename string_type::const_iterator, allocator_type> match(this->get_allocator());
+    if(!std::regex_match(str, match, syntax::ini_traits<typename string_type::value_type>::value_regex()))
         throw parsing_fail(line_no, str);
 
     if(this->find(match[1].str()) != this->end())
