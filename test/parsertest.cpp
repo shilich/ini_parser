@@ -26,8 +26,8 @@ BOOST_AUTO_TEST_SUITE(ParserTestSuit)
     BOOST_AUTO_TEST_CASE(ParserTest)
     {
         std::istringstream iss(test);
-        ini::File file;
-        ini::parse(std::istream_iterator<ini::Line>(iss), std::istream_iterator<ini::Line>(), file);
+        ini::File<std::string> file;
+        ini::parse(std::istream_iterator<ini::Line<std::string>>(iss), std::istream_iterator<ini::Line<std::string>>(), file);
 
         auto section_1 = file.at("Section1");
         BOOST_CHECK_EQUAL(section_1.at("value1").as<int>(), 123);
@@ -43,7 +43,7 @@ BOOST_AUTO_TEST_SUITE(ParserTestSuit)
         auto section_3 = file.at("last_section");
         BOOST_CHECK_EQUAL(section_3.at("str").as<std::string>(), "test string");
         BOOST_CHECK_EQUAL(section_3.at("mult").as<std::string>(), "several words string");
-        BOOST_CHECK(!section_3.contain("empty"));
+        BOOST_CHECK(section_3.find("empty") == section_3.end());
         BOOST_CHECK(section_3.at("enum").as<user::test_enum>() == user::test_enum::three);
 
         auto arr = section_3.get<std::vector<ini::Value>>("arr");

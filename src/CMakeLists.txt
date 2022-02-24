@@ -9,7 +9,6 @@ set(HEADERS
     value.h
     parser.h
     errors.h
-    const_string_map.h
     )
 
 set(SOURCES
